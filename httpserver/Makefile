@@ -1,3 +1,4 @@
+export tag=v1.0
 REPO=lendea
 IMAGE=httpserver_study
 SHELL        := /bin/bash
@@ -5,7 +6,7 @@ GO           ?= go
 GOFMT        ?= $(GO)fmt
 TIME         := $(shell date "+%Y%m%d%H%M%S")
 BRANCH       := $(shell git branch | grep \* | cut -d ' ' -f 2)
-VERSION      := $(shell if [[ ${BRANCH} == "master" ]]; then \
+VERSION      := $(shell if [[ ${BRANCH} == "main" ]]; then \
                             git describe --tags `git rev-list --tags=v* --max-count=1`; \
                         else \
                             echo "dev-"`git rev-list HEAD --max-count=1 | cut -b 1-8`; \
@@ -27,9 +28,7 @@ ENV_NAME 	  = local
 CERT_COMMON_NAME = localhost
 
 .PHONY: all prod-build prod
-
 all: prod
-
 prebuild: format style staticcheck
 prod: prod-build
 
@@ -56,14 +55,10 @@ prod-build-mac: prebuild
 
 
 .PHONY: ut
+#make ut OS=mac pkgs=./common
 ut:
 	@echo ">> running all tests"
 	$(GO) test -gcflags=-l -cover -v -race $(TESTPKGS)
-
-.PHONY: functest
-functest:
-	@echo ">> running function tests"
-	cd tests && ENV_NAME=$(ENV_NAME) $(GO) test -v
 
 .PHONY: cert
 cert:
@@ -71,3 +66,13 @@ cert:
 	cd cert && \
 	openssl genrsa -out server.key 2048 && \
 	openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650 -subj "/C=SH/ST=ShangHai/L=ShangHai/O=Lendea/OU=Study/CN=$(CERT_COMMON_NAME)/emailAddress=endealei@gmail.com"
+
+.PHONY: release
+release:
+	echo "building httpserver container"
+	docker build -t lendea/httpserver:${tag} .
+
+.PHONY: push
+push:
+	echo "pushing cncamp/httpserver"
+	docker push lendea/httpserver:${tag}
