@@ -1,1 +1,1 @@
-This logger package wraps zap logger for use in tracing or background logging.
+Http server
