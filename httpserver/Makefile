@@ -1,4 +1,4 @@
-export tag=v1.0
+export tag=v1.1
 REPO=lendea
 IMAGE=httpserver_study
 SHELL        := /bin/bash
@@ -74,5 +74,5 @@ release:
 
 .PHONY: push
 push:
-	echo "pushing cncamp/httpserver"
+	echo "pushing lendea/httpserver"
 	docker push lendea/httpserver:${tag}
