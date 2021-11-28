@@ -65,13 +65,13 @@ spec:
                 command:
                   - /bin/sh
                   - -c
-                  - echo 'Hello from the postStart handler' >> /var/log/message
+                  - echo 'Hello from the postStart handler' >> /tmp/message
             preStop: #优雅退出：在容器被终结之前， Kubernetes 将发送一个 preStop 事件。在容器被终止前的任务，用于优雅关闭应用程序、通知其他系统等等
               exec:
                 command:
                   - /bin/sh
                   - -c
-                  - echo 'Hello from the preStop handler' >> /var/log/message
+                  - echo 'Hello from the preStop handler' >> /tmp/message
 
 ---
 
