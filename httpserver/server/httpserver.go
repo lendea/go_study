@@ -2,32 +2,34 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"github.com/felixge/httpsnoop"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io"
+	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 	"time"
 	"turtorial.lendea.cn/common/logger"
+	"turtorial.lendea.cn/selfmonitor"
 )
 
 func MakeHTTPServer(ctx context.Context, version string) *http.Server {
-	mux := &http.ServeMux{}
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte(`<html>
-				<head><title> httpserver study</title></head>
-				<body>
-				<h1>HttpServer Study Health URL</h1>
-				<p><a href="` + "healthz" + `">HealthCheck</a></p>
-				</body>
-				</html>`))
-		if err != nil {
-			logger.For(ctx).Errorf("failed handling writer,error:%v", err)
-		}
-	})
 
+	mux := &http.ServeMux{}
+	mux.HandleFunc("/", indexHandler(ctx))
 	// health endpoint
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
-	})
+	mux.HandleFunc("/healthz", healthCheck())
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	mux.HandleFunc("/hello", rootHandler(ctx))
+	//prometheus metrics
+	selfmonitor.Register()
+	mux.Handle("/metrics", promhttp.Handler())
 
 	var handler http.Handler = mux
 	// 日志记录器包装 mux
@@ -39,6 +41,54 @@ func MakeHTTPServer(ctx context.Context, version string) *http.Server {
 		Handler:      handler,
 	}
 	return srv
+}
+
+func healthCheck() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+	}
+}
+
+func indexHandler(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte(`<html>
+				<head><title> httpserver study</title></head>
+				<body>
+				<h1>HttpServer Study Health URL</h1>
+				<p><a href="` + "healthz" + `">HealthCheck</a></p>
+				</body>
+				</html>`))
+		if err != nil {
+			logger.For(ctx).Errorf("failed handling writer,error:%v", err)
+		}
+	}
+}
+
+func rootHandler(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger.For(ctx).Info("entering root handler")
+		timer := selfmonitor.NewTimer()
+		defer timer.ObserveTotal()
+		user := r.URL.Query().Get("user")
+		delay := randInt(10, 2000)
+		io.WriteString(w, fmt.Sprintf("delay time [%d]\n", delay))
+		time.Sleep(time.Millisecond * time.Duration(delay))
+		if user != "" {
+			io.WriteString(w, fmt.Sprintf("hello [%s]\n", user))
+		} else {
+			io.WriteString(w, "hello [stranger]\n")
+		}
+		io.WriteString(w, "===================Details of the http request header:============\n")
+		for k, v := range r.Header {
+			io.WriteString(w, fmt.Sprintf("%s=%s\n", k, v))
+		}
+		logger.For(ctx).Infof("Respond in %d ms", delay)
+	}
+}
+
+func randInt(min int, max int) int {
+	rand.Seed(time.Now().UTC().UnixNano())
+	return min + rand.Intn(max-min)
 }
 
 func requestHandler(ctx context.Context, h http.Handler, version string) http.Handler {
