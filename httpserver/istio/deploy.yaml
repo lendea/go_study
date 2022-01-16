@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-httpserver-config
+data:
+  TZ: Asia/Shanghai
+  VERSION: 1.0.0
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpserver-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpserver-test
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+      labels:
+        app: httpserver-test
+    spec:
+      containers:
+        - name: httpserver-test
+          image: tianli11042004/httpserver:v1.0
+          #imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: my-httpserver-config
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              ### this probe will fail with 404 error code
+              ### only httpcode between 200-400 is retreated as success
+              path: /health/readiness
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 2
+          #          lifecycle:
+          #            postStart:
+          #              exec:
+          #                command: [ "/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message" ]
+          #            preStop:
+          #              exec:
+          #                command: [ "/bin/sh","-c"," while killall -0 httpserver; do sleep 1; done" ]
+          ports:
+            - containerPort: 80
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: httpserver-svc
+spec:
+  selector:
+    app: httpserver-test
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      #nodePort: 30002
+  #type: NodePort
+  type: ClusterIP
